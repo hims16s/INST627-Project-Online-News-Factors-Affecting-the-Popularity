@@ -1,0 +1,259 @@
+---
+title: 'R Notebook: INST627 Online News: Factors Affecting the Popularity'
+output:
+  html_notebook: default
+  html_document: default
+  pdf_document: default
+---
+
+Download link for dataset: https://archive.ics.uci.edu/ml/datasets/Online+News+Popularity
+Source: K. Fernandes, P. Vinagre and P. Cortez. A Proactive Intelligent Decision Support System for Predicting the Popularity of Online News. Proceedings of the 17th EPIA 2015 - Portuguese Conference on Artificial Intelligence, September, Coimbra, Portugal. 
+
+```{r Loading data and libraries}
+#news_data <- read.csv("C:/Users/PAL/Desktop/MIM/INST627/Project/Data/OnlineNewsPopularity_other.csv")
+# choose the appropriate csv file with dataset
+news_data <- read_csv(choose.files())
+View(news_data)
+library(car)
+```
+
+Question 1: Length of Title and Content
+
+```{r 1:Data Cleaning}
+tokens.title=scale(log(news_data$n_tokens_title+1))
+tokens.content=scale(log(news_data$n_tokens_content+1))
+shares=scale(log(news_data$shares+1))
+```
+
+```{r 1:Descriptive Analysis}
+summary(tokens.title)
+summary(tokens.content)
+summary(shares)
+sd(tokens.title)
+sd(tokens.content)
+sd(shares)
+```
+
+```{r 1: Assumption Test: Multicollinearity}
+cor.test(tokens.content,tokens.title)
+```
+This assumption is not violated as the correlation coeeficient is very small , thus indicating that the independent variables are not significantly correlated.
+
+```{r 1: Assumption Test: Non-linearity }
+plot(tokens.title,shares)
+plot(tokens.content,shares)
+```
+From the above two plots, it safe to state that that assumption of linearity is violated.
+
+```{r 1: Assumption Test: Outliers}
+m=lm(shares~tokens.title+tokens.content)
+pred=m$fitted.values
+resid=m$residuals
+resid.sd=sd(resid)
+resid[abs(resid)>=3*resid.sd]
+```
+There are quite a lot of outliers in this dataset, thus violating the assumption. But we keep them as it is in order to not tamper with our final results.
+
+``` {r 1: Assumption Test: Constant Error}
+plot(pred,resid) 
+```
+The assumption of constant error is violated as residuals are not varying consistently with the predicted values.
+
+``` {r 1: Assumption Test: Normality of Errors}
+hist(resid, main="Histogram of Residuals", xlab="Residuals") 
+```
+The histogram of the residuals suggests that the data is quite normal and hence, the assumption of normality is not violated. We did not carry out the Shapiro Wilk test as it requires number of observations to be less than 5000.
+
+```{r 1: Assumption Test: Independence of Errors}
+durbinWatsonTest(m)
+```
+Since p<0.05, we reject the null hypothesis; thus indicating the presence of auto-correlation. Hence, the assumption of independence is violated.
+
+```{r 1: Multiple Regression}
+m=lm(shares~tokens.title+tokens.content)
+summary(m)
+
+```
+
+Question 2: Day of Publication
+
+```{r 2:Data Cleaning}
+##scaling variables after log transformation
+shares=scale(log(news_data$shares+1))
+```
+
+```{r 2:Descriptive Analysis}
+summary(shares)
+sd(shares)
+table(news_data$is_weekend)
+```
+
+```{r 2: Assumption Test: Normality}
+nd.weekend = subset(news_data, is_weekend == 1)
+
+qqnorm(nd.weekend$shares)
+qqline(nd.weekend$shares)
+hist(nd.weekend$shares)
+
+nd.weekday = subset(news_data, is_weekend == 0)
+
+qqnorm(nd.weekday$shares)
+qqline(nd.weekday$shares)
+hist(nd.weekday$shares)
+
+#Both distributions are not normal but ANOVA is robust against some deviation from normality
+```
+
+```{r 2: Assumption Test: Homogeinity of variance}
+library(car)
+#To perform the Levene Test the 'is_weekend' variable was transformed into another variable named 'day' with two levels, i.e. weekday and weekend. This was done since Levene Test does not accept quantitative variables.
+leveneTest(shares~day)
+```
+Since we fail to reject the null the assumption of homogeinity of variance is satisfied
+
+Assumption Test: Independence of Observations
+There is no overlap in the number of shares observed for articles published on weekdays and weekends. Hence this assumption is satisfied
+
+
+```{r 2: ANOVA test}
+anova = aov(shares~is_weekend, data = news_data)
+summary(anova)
+```
+
+```{r 2: Bar Plot with error bars}
+library(ggplot2)
+ggplot(news_data,aes(x=is_weekend, y=shares)) + stat_summary(fun.y = "mean", geom = "bar", fill = "white", color = "black", position = "dodge") + stat_summary(fun.data = mean_cl_normal, geom = "errorbar", position = position_dodge(width = 0.90), width = 0.2)
+```
+
+Question 3: Presence of Multimedia
+
+```{r 3: Data Cleaning}
+##take log of variables 
+number_images=log(news_data$num_imgs+1)
+number_videos=log(news_data$num_videos+1)
+number_shares=log(news_data$shares+1)
+
+##Scaling our variables
+images=scale(number_images, center = TRUE, scale = TRUE)
+videos=scale(number_videos, center= TRUE, scale= TRUE)
+shares=scale(number_shares, center=TRUE, scale=TRUE)
+
+```
+
+```{r 3: Descriptive Analysis}
+summary(images)
+sd(images)
+
+summary(videos)
+sd(videos)
+
+summary(shares)
+sd(shares)
+```
+
+```{r 3: Assumption Test: Multicollinearity}
+cor.test(images,videos)
+```
+This assumption is not violated as the correlation coeeficient is very small , thus indicating that the independent variables are not significantly correlated.
+
+```{r 3: Assumption Test: Non-linearity}
+plot(images,shares)
+plot(videos,shares)
+```
+From the above two plots, it is safe to state that the assumption of linearity is violated.
+
+```{r 3: Assumption Test: Outliers}
+m=lm(shares~images+videos)
+pred=m$fitted.values
+resid=m$residuals
+resid.sd=sd(resid)
+resid[abs(resid)>=3*resid.sd]
+```
+There are quite a lot of outliers in this dataset, thus violating the assumption. But we keep them as it is in order to not tamper with our final results.
+
+```{r 3: Assumption Test: Constant Error }
+plot(pred,resid) 
+```
+The assumption of consant error is violated as residuals are not varying consistently with the predicted values.
+
+```{r 3: Assumption Test: Normality of Errors}
+hist(resid,main="Histogram of Residuals", xlab="Residuals")
+```
+The histogram of the residuals suggests that the data is quite normal and hence, the assumption of normality is not violated. We did not carry out the Shapiro Wilk test as it requires number of observations to be less than 5000.
+
+```{r 3: Assumption Test: Independence of Errors}
+durbinWatsonTest(m)
+```
+Since the p-value is equal to 0, we reject the null and so there is an autocorrelation between the residuals. So this assumption is violated.
+
+```{r 3: Multiple Regression}
+m=lm(shares~images+videos)
+summary(m)
+```
+
+Research Question 4: Title and Content Polarity
+
+```{r 4: Data Cleaning}
+positive_words=scale(log(news_data$rate_positive_words+1))
+negative_words=scale(log(news_data$rate_negative_words+1))
+shares=scale(log(news_data$shares+1))
+```
+
+```{r 4: Descriptive Analysis}
+summary(positive_words)
+summary(negative_words)
+summary(shares)
+sd(positive_words)
+sd(negative_words)
+sd(shares)
+```
+
+```{r 4: Assumption Test: Multicollinearity}
+cor.test(positive_words,negative_words)
+```
+The correlation coefficient is -0.39 which is close to 0 and so the two variables are not highly correlated. So this assumption is not violated.
+
+```{r 4: Assumption Test: Non-linearity}
+plot(positive_words,shares)
+plot(negative_words,shares)
+```
+From the above plots we can see that the distribution is not linear. Thus the linearity assumption is violated.
+
+```{r 4: Assumption Test: Outliers}
+m=lm(formula = shares ~ positive_words + negative_words)
+pred=m$fitted.values
+resid=m$residuals
+resid.sd=sd(resid)
+resid[abs(resid)>=3*resid.sd]
+```
+There are a lot of outliers present in the data and so the assumption that there are no outliers is violated.
+
+```{r 4: Assumption Test: Constant Errors}
+plot(pred,resid)
+```
+From the above plot, we can see that the variance in error is not same for all levels of the predictors. So this assumption is violated.
+
+```{r 4: Assumption Test: Normality of Errors}
+hist(resid, main="Histogram of Residuals", xlab="Residuals") 
+```
+From the above figure, we can see that the distribution is almost normal and so this assumption is not violated.
+
+```{r 4: Assumption Test: Independence of Errors}
+durbinWatsonTest(m)
+```
+Since the p-value is equal to 0, we reject the null and so there is an autocorrelation between the residuals. So this assumption is violated.
+
+```{r 4: Multiple Regression}
+m=lm(formula = shares ~ positive_words + negative_words)
+summary(m)
+```
+
+Research Question 5: All predictor variables
+
+```{r Multiple Regression}
+m=lm(shares ~ tokens.title+ tokens.content+ images+ videos+ news_data$is_weekend+ positive_words + negative_words)
+summary(m)
+
+new_m=lm(shares ~ tokens.title+ tokens.content+ images+ videos+ news_data$is_weekend+ positive_words)
+summary(new_m)
+```
